@@ -1,0 +1,62 @@
+{
+  "agent_name": "Calendar Summary Agent",
+  "agent_id": "69a09aa3ac231956dceb6a60",
+  "description": "Fetches upcoming and recent Google Calendar events, generates a concise summary of your schedule, and produces an actionable to-do list from calendar commitments",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "summary": [
+      {
+        "event_title": "string",
+        "date_time": "string",
+        "duration": "string",
+        "attendees": "string",
+        "gist": "string"
+      }
+    ],
+    "todos": [
+      {
+        "task": "string",
+        "source_event": "string",
+        "priority": "string"
+      }
+    ],
+    "total_events_analyzed": "number",
+    "conflicts": [
+      {
+        "event_1": "string",
+        "event_2": "string",
+        "conflict_time": "string"
+      }
+    ],
+    "message": "string"
+  },
+  "example_response": {
+    "summary": [
+      {
+        "event_title": "sample string",
+        "date_time": "sample string",
+        "duration": "sample string",
+        "attendees": "sample string",
+        "gist": "sample string"
+      }
+    ],
+    "todos": [
+      {
+        "task": "sample string",
+        "source_event": "sample string",
+        "priority": "sample string"
+      }
+    ],
+    "total_events_analyzed": 0,
+    "conflicts": [
+      {
+        "event_1": "sample string",
+        "event_2": "sample string",
+        "conflict_time": "sample string"
+      }
+    ],
+    "message": "sample string"
+  }
+}

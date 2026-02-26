@@ -17,6 +17,12 @@
       "type": "Agent",
       "label": "Slack Summary Agent",
       "nodeCategory": "agent"
+    },
+    {
+      "id": "calendar_agent",
+      "type": "Agent",
+      "label": "Calendar Summary Agent",
+      "nodeCategory": "agent"
     }
   ],
   "edges": [
@@ -27,6 +33,10 @@
     {
       "source": "input_node",
       "target": "slack_agent"
+    },
+    {
+      "source": "input_node",
+      "target": "calendar_agent"
     }
   ]
 }

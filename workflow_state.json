@@ -33,6 +33,23 @@
       "voice_output": false,
       "file_output": false,
       "response_schema_file": "response_schemas/slack_summary_agent_response.json"
+    },
+    {
+      "agent_id": "69a09aa3ac231956dceb6a60",
+      "name": "Calendar Summary Agent",
+      "node_id": "calendar_agent",
+      "description": "Fetches upcoming and recent Google Calendar events, generates a concise summary of your schedule, and produces an actionable to-do list from calendar commitments",
+      "model": "gpt-4.1",
+      "provider": "openai",
+      "temperature": 0.3,
+      "top_p": 1,
+      "agent_type": "json",
+      "tools": ["GOOGLECALENDAR_FIND_EVENT"],
+      "tool_source": "composio",
+      "image_output": false,
+      "voice_output": false,
+      "file_output": false,
+      "response_schema_file": "response_schemas/calendar_summary_agent_response.json"
     }
   ]
 }

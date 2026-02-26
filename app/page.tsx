@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { HiOutlineMail, HiOutlineRefresh, HiOutlineInbox, HiOutlineChevronDown, HiOutlineChevronUp, HiOutlineExclamationCircle, HiOutlineSearch, HiOutlineChatAlt2 } from 'react-icons/hi'
+import { HiOutlineMail, HiOutlineRefresh, HiOutlineInbox, HiOutlineChevronDown, HiOutlineChevronUp, HiOutlineExclamationCircle, HiOutlineSearch, HiOutlineChatAlt2, HiOutlineCalendar, HiOutlineExclamation } from 'react-icons/hi'
 import { FaSlack } from 'react-icons/fa'
 import { FiLoader, FiX, FiCheckCircle, FiActivity } from 'react-icons/fi'
 
@@ -73,9 +73,38 @@ interface SlackResponse {
   message: string
 }
 
+interface CalendarSummaryItem {
+  event_title: string
+  date_time: string
+  duration: string
+  attendees: string
+  gist: string
+}
+
+interface CalendarTodoItem {
+  task: string
+  source_event: string
+  priority: string
+}
+
+interface CalendarConflict {
+  event_1: string
+  event_2: string
+  conflict_time: string
+}
+
+interface CalendarResponse {
+  summary: CalendarSummaryItem[]
+  todos: CalendarTodoItem[]
+  total_events_analyzed: number
+  conflicts: CalendarConflict[]
+  message: string
+}
+
 // --- Constants ---
 const GMAIL_AGENT_ID = '69a0975820f2d8662ce27ba7'
 const SLACK_AGENT_ID = '69a09759488a186a311cc2d9'
+const CALENDAR_AGENT_ID = '69a09aa3ac231956dceb6a60'
 
 // --- Sample Data ---
 const SAMPLE_GMAIL: GmailResponse = {
@@ -114,6 +143,28 @@ const SAMPLE_SLACK: SlackResponse = {
   message: 'Analyzed 312 messages across 4 active channels and identified 4 key discussions with 4 action items.'
 }
 
+const SAMPLE_CALENDAR: CalendarResponse = {
+  summary: [
+    { event_title: 'Weekly Sprint Planning', date_time: 'Mon Feb 27, 9:00 AM - 10:00 AM', duration: '1 hour', attendees: 'Engineering Team (12 people)', gist: 'Review sprint backlog, assign stories for the week, and discuss blockers from last sprint.' },
+    { event_title: 'Product Strategy Review', date_time: 'Tue Feb 28, 2:00 PM - 3:30 PM', duration: '1.5 hours', attendees: 'Sarah C., Derek M., VP Product', gist: 'Q1 product roadmap review with stakeholders. Presenting user research findings and prioritization framework.' },
+    { event_title: '1:1 with Manager', date_time: 'Wed Mar 1, 11:00 AM - 11:30 AM', duration: '30 min', attendees: 'Sarah Chen', gist: 'Regular check-in. Discuss career growth plan and feedback on recent project delivery.' },
+    { event_title: 'Design Review: Dashboard V2', date_time: 'Thu Mar 2, 3:00 PM - 4:00 PM', duration: '1 hour', attendees: 'Lisa P., Chen W., UX Team', gist: 'Review updated dashboard mockups incorporating user feedback. Focus on data visualization components.' },
+    { event_title: 'Client Demo - Acme Corp', date_time: 'Fri Mar 3, 10:00 AM - 11:00 AM', duration: '1 hour', attendees: 'Mark J., Acme Corp Team (4)', gist: 'Live demo of new enterprise features for Acme Corp renewal discussion. Prepare demo environment.' },
+  ],
+  todos: [
+    { task: 'Prepare sprint backlog and priority list before Monday planning', source_event: 'Weekly Sprint Planning - Mon', priority: 'high' },
+    { task: 'Finalize product roadmap slides and user research summary', source_event: 'Product Strategy Review - Tue', priority: 'high' },
+    { task: 'Write self-assessment notes for 1:1 discussion', source_event: '1:1 with Manager - Wed', priority: 'medium' },
+    { task: 'Review dashboard V2 mockups and prepare feedback', source_event: 'Design Review - Thu', priority: 'medium' },
+    { task: 'Set up demo environment and test all enterprise features', source_event: 'Client Demo Acme Corp - Fri', priority: 'high' },
+  ],
+  total_events_analyzed: 23,
+  conflicts: [
+    { event_1: 'Product Strategy Review', event_2: 'Engineering Standup', conflict_time: 'Tue Feb 28, 2:00 PM - 2:15 PM' },
+  ],
+  message: 'Analyzed 23 events over the next 7 days. Found 5 key events, 5 action items, and 1 scheduling conflict.'
+}
+
 // --- Helpers ---
 function extractAgentData(result: any): any {
   try {
@@ -125,12 +176,12 @@ function extractAgentData(result: any): any {
       try {
         data = JSON.parse(data)
       } catch {
-        return { message: data, summary: [], todos: [] }
+        return { message: data, summary: [], todos: [], conflicts: [] }
       }
     }
-    return data || { message: 'No data received', summary: [], todos: [] }
+    return data || { message: 'No data received', summary: [], todos: [], conflicts: [] }
   } catch {
-    return { message: 'Failed to parse response', summary: [], todos: [] }
+    return { message: 'Failed to parse response', summary: [], todos: [], conflicts: [] }
   }
 }
 
@@ -720,11 +771,302 @@ function SlackSection({
   )
 }
 
+// --- Calendar Section ---
+function CalendarSection({
+  data,
+  loading,
+  error,
+  onFetch,
+  onRetry,
+  checkedTodos,
+  onToggleTodo,
+  sampleMode,
+}: {
+  data: CalendarResponse | null
+  loading: boolean
+  error: string | null
+  onFetch: (query: string, daysAhead: number) => void
+  onRetry: () => void
+  checkedTodos: Record<string, boolean>
+  onToggleTodo: (key: string) => void
+  sampleMode: boolean
+}) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [daysAhead, setDaysAhead] = useState(7)
+  const [summaryOpen, setSummaryOpen] = useState(true)
+
+  const displayData = sampleMode ? SAMPLE_CALENDAR : data
+  const summaryItems = Array.isArray(displayData?.summary) ? displayData.summary : []
+  const todoItems = Array.isArray(displayData?.todos) ? displayData.todos : []
+  const conflictItems = Array.isArray(displayData?.conflicts) ? displayData.conflicts : []
+  const totalAnalyzed = displayData?.total_events_analyzed ?? 0
+  const responseMessage = displayData?.message ?? ''
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg" style={{ background: 'hsl(180, 35%, 92%)' }}>
+          <HiOutlineCalendar className="w-6 h-6" style={{ color: 'hsl(180, 35%, 45%)' }} />
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold font-sans" style={{ color: 'hsl(30, 25%, 18%)' }}>Calendar</h2>
+          <p className="text-xs" style={{ color: 'hsl(30, 15%, 45%)' }}>Review your schedule</p>
+        </div>
+      </div>
+
+      {/* Filter Bar */}
+      <Card style={{ background: 'hsl(40, 35%, 98%)', borderColor: 'hsl(35, 25%, 82%)' }} className="shadow-md border">
+        <CardContent className="p-4 space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium" style={{ color: 'hsl(30, 15%, 45%)' }}>Search filter</Label>
+            <div className="relative">
+              <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'hsl(30, 15%, 45%)' }} />
+              <Input
+                placeholder="e.g., standup, review meeting"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-8 text-sm"
+                style={{ borderColor: 'hsl(35, 20%, 75%)', background: 'hsl(40, 30%, 96%)' }}
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <FiX className="w-3.5 h-3.5" style={{ color: 'hsl(30, 15%, 45%)' }} />
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium" style={{ color: 'hsl(30, 15%, 45%)' }}>Days ahead</Label>
+            <Input
+              type="number"
+              min={1}
+              max={30}
+              value={daysAhead}
+              onChange={(e) => setDaysAhead(Number(e.target.value) || 7)}
+              className="text-sm w-24"
+              style={{ borderColor: 'hsl(35, 20%, 75%)', background: 'hsl(40, 30%, 96%)' }}
+            />
+          </div>
+          <Button
+            onClick={() => onFetch(searchQuery, daysAhead)}
+            disabled={loading}
+            className="w-full font-medium text-sm shadow-md"
+            style={{ background: 'hsl(180, 35%, 40%)', color: 'hsl(40, 30%, 98%)' }}
+          >
+            {loading ? (
+              <span className="flex items-center gap-2"><FiLoader className="w-4 h-4 animate-spin" /> Analyzing...</span>
+            ) : (
+              <span className="flex items-center gap-2"><HiOutlineCalendar className="w-4 h-4" /> Summarize Calendar</span>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Loading State */}
+      {loading && (
+        <div className="space-y-4">
+          <Card style={{ background: 'hsl(40, 35%, 98%)', borderColor: 'hsl(35, 25%, 82%)' }} className="shadow-md border">
+            <CardHeader className="pb-2"><Skeleton className="h-5 w-40" /></CardHeader>
+            <SummarySkeleton />
+          </Card>
+          <Card style={{ background: 'hsl(40, 35%, 98%)', borderColor: 'hsl(35, 25%, 82%)' }} className="shadow-md border">
+            <CardHeader className="pb-2"><Skeleton className="h-5 w-32" /></CardHeader>
+            <TodoSkeleton />
+          </Card>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <Card style={{ background: 'hsl(0, 65%, 97%)', borderColor: 'hsl(0, 65%, 85%)' }} className="shadow-md border">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <HiOutlineExclamationCircle className="w-5 h-5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0, 65%, 50%)' }} />
+              <div className="flex-1">
+                <p className="text-sm font-medium" style={{ color: 'hsl(0, 65%, 40%)' }}>Failed to fetch Calendar summary</p>
+                <p className="text-xs mt-1" style={{ color: 'hsl(0, 40%, 50%)' }}>{error}</p>
+                <Button onClick={onRetry} variant="outline" size="sm" className="mt-3 text-xs" style={{ borderColor: 'hsl(0, 65%, 75%)', color: 'hsl(0, 65%, 45%)' }}>
+                  Try again
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Empty State */}
+      {!loading && !error && !displayData && (
+        <Card style={{ background: 'hsl(40, 35%, 98%)', borderColor: 'hsl(35, 25%, 82%)' }} className="shadow-md border">
+          <CardContent className="p-8 flex flex-col items-center text-center">
+            <div className="p-4 rounded-full mb-4" style={{ background: 'hsl(40, 25%, 90%)' }}>
+              <HiOutlineCalendar className="w-10 h-10" style={{ color: 'hsl(30, 15%, 45%)' }} />
+            </div>
+            <p className="font-medium text-sm" style={{ color: 'hsl(30, 25%, 18%)' }}>Click Summarize Calendar to review your schedule</p>
+            <p className="text-xs mt-1" style={{ color: 'hsl(30, 15%, 45%)' }}>Event summaries, conflicts, and action items will appear here</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Results */}
+      {!loading && displayData && (
+        <div className="space-y-4">
+          {/* Stats bar */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {totalAnalyzed > 0 && (
+              <Badge variant="secondary" className="text-xs font-medium px-3 py-1" style={{ background: 'hsl(40, 25%, 90%)', color: 'hsl(30, 25%, 18%)' }}>
+                {totalAnalyzed} events analyzed
+              </Badge>
+            )}
+            {responseMessage && (
+              <span className="text-xs" style={{ color: 'hsl(30, 15%, 45%)' }}>{responseMessage}</span>
+            )}
+          </div>
+
+          {/* Conflicts Warning Card */}
+          {conflictItems.length > 0 && (
+            <Card className="shadow-md border" style={{ background: 'hsl(35, 85%, 93%)', borderColor: 'hsl(35, 60%, 70%)' }}>
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <HiOutlineExclamation className="w-4 h-4" style={{ color: 'hsl(35, 85%, 40%)' }} />
+                  <CardTitle className="text-sm font-semibold" style={{ color: 'hsl(35, 85%, 40%)' }}>Scheduling Conflicts</CardTitle>
+                  <Badge variant="secondary" className="text-xs" style={{ background: 'hsl(35, 85%, 85%)', color: 'hsl(35, 85%, 30%)' }}>
+                    {conflictItems.length}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0 pb-4">
+                <div className="space-y-2">
+                  {conflictItems.map((conflict, idx) => (
+                    <div key={idx} className="p-3 rounded-lg border" style={{ background: 'hsl(35, 85%, 97%)', borderColor: 'hsl(35, 60%, 80%)' }}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ background: 'hsl(35, 85%, 85%)', color: 'hsl(35, 85%, 30%)' }}>
+                          {conflict?.event_1 ?? 'Event 1'}
+                        </span>
+                        <span className="text-xs" style={{ color: 'hsl(35, 85%, 40%)' }}>vs</span>
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ background: 'hsl(35, 85%, 85%)', color: 'hsl(35, 85%, 30%)' }}>
+                          {conflict?.event_2 ?? 'Event 2'}
+                        </span>
+                      </div>
+                      <p className="text-xs mt-1.5 font-medium" style={{ color: 'hsl(35, 85%, 35%)' }}>
+                        Overlap: {conflict?.conflict_time ?? 'Unknown time'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Summary Card */}
+          {summaryItems.length > 0 && (
+            <Collapsible open={summaryOpen} onOpenChange={setSummaryOpen}>
+              <Card style={{ background: 'hsl(40, 35%, 98%)', borderColor: 'hsl(35, 25%, 82%)' }} className="shadow-md border">
+                <CollapsibleTrigger asChild>
+                  <CardHeader className="pb-2 cursor-pointer hover:opacity-80 transition-opacity">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <HiOutlineCalendar className="w-4 h-4" style={{ color: 'hsl(180, 35%, 45%)' }} />
+                        <CardTitle className="text-sm font-semibold" style={{ color: 'hsl(30, 25%, 18%)' }}>Event Summaries</CardTitle>
+                        <Badge variant="secondary" className="text-xs" style={{ background: 'hsl(180, 35%, 92%)', color: 'hsl(180, 35%, 35%)' }}>
+                          {summaryItems.length}
+                        </Badge>
+                      </div>
+                      {summaryOpen ? <HiOutlineChevronUp className="w-4 h-4" style={{ color: 'hsl(30, 15%, 45%)' }} /> : <HiOutlineChevronDown className="w-4 h-4" style={{ color: 'hsl(30, 15%, 45%)' }} />}
+                    </div>
+                  </CardHeader>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <CardContent className="pt-0 pb-4">
+                    <ScrollArea className="max-h-[400px]">
+                      <div className="space-y-3">
+                        {summaryItems.map((item, idx) => (
+                          <div key={idx} className="p-3 rounded-lg border" style={{ background: 'hsl(40, 30%, 96%)', borderColor: 'hsl(35, 25%, 87%)' }}>
+                            <p className="text-sm font-semibold leading-tight mb-1" style={{ color: 'hsl(30, 25%, 18%)' }}>
+                              {item?.event_title ?? 'Untitled Event'}
+                            </p>
+                            <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                              <span className="text-xs font-medium" style={{ color: 'hsl(180, 35%, 40%)' }}>
+                                {item?.date_time ?? ''}
+                              </span>
+                              {item?.duration && (
+                                <Badge variant="outline" className="text-xs px-1.5 py-0" style={{ borderColor: 'hsl(180, 35%, 75%)', color: 'hsl(180, 35%, 40%)', fontSize: '10px' }}>
+                                  {item.duration}
+                                </Badge>
+                              )}
+                            </div>
+                            {item?.attendees && (
+                              <p className="text-xs mb-1.5" style={{ color: 'hsl(30, 15%, 45%)' }}>
+                                Attendees: {item.attendees}
+                              </p>
+                            )}
+                            <p className="text-xs leading-relaxed" style={{ color: 'hsl(30, 15%, 35%)', lineHeight: '1.65' }}>{item?.gist ?? ''}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
+          )}
+
+          {/* Todo Checklist */}
+          {todoItems.length > 0 && (
+            <Card style={{ background: 'hsl(40, 35%, 98%)', borderColor: 'hsl(35, 25%, 82%)' }} className="shadow-md border">
+              <CardHeader className="pb-2">
+                <div className="flex items-center gap-2">
+                  <FiCheckCircle className="w-4 h-4" style={{ color: 'hsl(180, 35%, 40%)' }} />
+                  <CardTitle className="text-sm font-semibold" style={{ color: 'hsl(30, 25%, 18%)' }}>Action Items</CardTitle>
+                  <Badge variant="secondary" className="text-xs" style={{ background: 'hsl(180, 35%, 92%)', color: 'hsl(180, 35%, 35%)' }}>
+                    {todoItems.filter((_, idx) => !checkedTodos[`calendar-${idx}`]).length} remaining
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0 pb-4">
+                <div className="space-y-2">
+                  {todoItems.map((todo, idx) => {
+                    const key = `calendar-${idx}`
+                    const checked = !!checkedTodos[key]
+                    return (
+                      <div key={idx} className="flex items-start gap-3 p-3 rounded-lg border transition-all duration-200" style={{ background: checked ? 'hsl(40, 20%, 92%)' : 'hsl(40, 30%, 96%)', borderColor: 'hsl(35, 25%, 87%)', opacity: checked ? 0.7 : 1 }}>
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={() => onToggleTodo(key)}
+                          className="mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-sm leading-relaxed ${checked ? 'line-through' : ''}`} style={{ color: 'hsl(30, 25%, 18%)', lineHeight: '1.65' }}>
+                            {todo?.task ?? ''}
+                          </p>
+                          <div className="flex items-center gap-2 mt-2 flex-wrap">
+                            <Badge variant="outline" className="text-xs px-2 py-0.5" style={{ borderColor: 'hsl(180, 35%, 75%)', color: 'hsl(180, 35%, 40%)', fontSize: '10px' }}>
+                              {todo?.source_event ?? 'Unknown'}
+                            </Badge>
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: getPriorityBg(todo?.priority ?? ''), color: getPriorityColor(todo?.priority ?? '') }}>
+                              {(todo?.priority ?? 'medium').charAt(0).toUpperCase() + (todo?.priority ?? 'medium').slice(1)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // --- Agent Status ---
 function AgentStatusPanel({ activeAgentId }: { activeAgentId: string | null }) {
   const agents = [
     { id: GMAIL_AGENT_ID, name: 'Gmail Summary Agent', desc: 'Fetches and summarizes recent emails', icon: HiOutlineMail, color: 'hsl(0, 65%, 50%)' },
     { id: SLACK_AGENT_ID, name: 'Slack Summary Agent', desc: 'Summarizes Slack channel conversations', icon: FaSlack, color: 'hsl(290, 50%, 45%)' },
+    { id: CALENDAR_AGENT_ID, name: 'Calendar Summary Agent', desc: 'Summarizes Google Calendar events', icon: HiOutlineCalendar, color: 'hsl(180, 35%, 45%)' },
   ]
 
   return (
@@ -736,12 +1078,12 @@ function AgentStatusPanel({ activeAgentId }: { activeAgentId: string | null }) {
         </div>
       </CardHeader>
       <CardContent className="pt-0 pb-3">
-        <div className="space-y-2">
+        <div className="flex flex-col sm:flex-row sm:gap-4 gap-2">
           {agents.map((agent) => {
             const isActive = activeAgentId === agent.id
             const IconComponent = agent.icon
             return (
-              <div key={agent.id} className="flex items-center gap-3 p-2 rounded-lg" style={{ background: isActive ? 'hsl(40, 25%, 90%)' : 'transparent' }}>
+              <div key={agent.id} className="flex items-center gap-3 p-2 rounded-lg flex-1" style={{ background: isActive ? 'hsl(40, 25%, 90%)' : 'transparent' }}>
                 <div className="relative">
                   <IconComponent className="w-4 h-4" style={{ color: agent.color }} />
                   <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full" style={{ background: isActive ? 'hsl(140, 60%, 45%)' : 'hsl(40, 20%, 75%)' }} />
@@ -751,7 +1093,7 @@ function AgentStatusPanel({ activeAgentId }: { activeAgentId: string | null }) {
                   <p className="text-xs truncate" style={{ color: 'hsl(30, 15%, 45%)', fontSize: '10px' }}>{agent.desc}</p>
                 </div>
                 {isActive && (
-                  <span className="text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: 'hsl(140, 50%, 93%)', color: 'hsl(140, 60%, 35%)', fontSize: '10px' }}>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0" style={{ background: 'hsl(140, 50%, 93%)', color: 'hsl(140, 60%, 35%)', fontSize: '10px' }}>
                     Active
                   </span>
                 )}
@@ -777,6 +1119,12 @@ export default function Page() {
   const [slackLoading, setSlackLoading] = useState(false)
   const [slackError, setSlackError] = useState<string | null>(null)
   const [slackLastQuery, setSlackLastQuery] = useState({ channels: '', messageCount: 50 })
+
+  // Calendar state
+  const [calendarData, setCalendarData] = useState<CalendarResponse | null>(null)
+  const [calendarLoading, setCalendarLoading] = useState(false)
+  const [calendarError, setCalendarError] = useState<string | null>(null)
+  const [calendarLastQuery, setCalendarLastQuery] = useState({ query: '', daysAhead: 7 })
 
   // Shared state
   const [checkedTodos, setCheckedTodos] = useState<Record<string, boolean>>({})
@@ -845,12 +1193,43 @@ export default function Page() {
     fetchSlack(slackLastQuery.channels, slackLastQuery.messageCount)
   }, [fetchSlack, slackLastQuery])
 
+  // Calendar fetch
+  const fetchCalendar = useCallback(async (searchQuery: string, daysAhead: number) => {
+    setCalendarLoading(true)
+    setCalendarError(null)
+    setActiveAgentId(CALENDAR_AGENT_ID)
+    setCalendarLastQuery({ query: searchQuery, daysAhead })
+
+    try {
+      const message = `Summarize my Google Calendar events.${searchQuery ? ' Search filter: ' + searchQuery : ''} Look ahead ${daysAhead} days from today.`
+      const result = await callAIAgent(message, CALENDAR_AGENT_ID)
+
+      if (result?.success) {
+        const data = extractAgentData(result)
+        setCalendarData(data as CalendarResponse)
+      } else {
+        setCalendarError(result?.error ?? result?.response?.message ?? 'Failed to fetch Calendar summary')
+      }
+    } catch (err) {
+      setCalendarError(err instanceof Error ? err.message : 'Network error')
+    } finally {
+      setCalendarLoading(false)
+      setActiveAgentId(null)
+    }
+  }, [])
+
+  const retryCalendar = useCallback(() => {
+    fetchCalendar(calendarLastQuery.query, calendarLastQuery.daysAhead)
+  }, [fetchCalendar, calendarLastQuery])
+
+  const anyLoading = gmailLoading || slackLoading || calendarLoading
+
   return (
     <ErrorBoundary>
       <div style={{ background: 'hsl(40, 30%, 96%)', color: 'hsl(30, 25%, 18%)' }} className="min-h-screen font-sans">
         {/* Sticky Header */}
         <header className="sticky top-0 z-50 border-b shadow-sm" style={{ background: 'hsl(40, 35%, 98%)', borderColor: 'hsl(35, 25%, 82%)' }}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg shadow-sm" style={{ background: 'hsl(25, 55%, 40%)' }}>
@@ -858,13 +1237,13 @@ export default function Page() {
                 </div>
                 <div>
                   <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ color: 'hsl(30, 25%, 18%)' }}>Inbox Intelligence Hub</h1>
-                  <p className="text-xs hidden sm:block" style={{ color: 'hsl(30, 15%, 45%)' }}>AI-powered summaries for Gmail and Slack</p>
+                  <p className="text-xs hidden sm:block" style={{ color: 'hsl(30, 15%, 45%)' }}>AI-powered summaries for Gmail, Slack, and Calendar</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
                 {/* Sample Data Toggle */}
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="sample-toggle" className="text-xs font-medium cursor-pointer" style={{ color: 'hsl(30, 15%, 45%)' }}>
+                  <Label htmlFor="sample-toggle" className="text-xs font-medium cursor-pointer hidden sm:inline" style={{ color: 'hsl(30, 15%, 45%)' }}>
                     Sample Data
                   </Label>
                   <Switch
@@ -873,18 +1252,19 @@ export default function Page() {
                     onCheckedChange={setSampleMode}
                   />
                 </div>
-                {/* Refresh button (visual only when both not loading) */}
+                {/* Refresh button */}
                 <button
                   onClick={() => {
                     if (!gmailLoading && gmailData) retryGmail()
                     if (!slackLoading && slackData) retrySlack()
+                    if (!calendarLoading && calendarData) retryCalendar()
                   }}
-                  disabled={gmailLoading || slackLoading}
+                  disabled={anyLoading}
                   className="p-2 rounded-lg transition-all duration-200 hover:shadow-sm disabled:opacity-40"
                   style={{ background: 'hsl(40, 25%, 90%)' }}
                   title="Refresh all"
                 >
-                  <HiOutlineRefresh className={`w-5 h-5 ${(gmailLoading || slackLoading) ? 'animate-spin' : ''}`} style={{ color: 'hsl(25, 55%, 40%)' }} />
+                  <HiOutlineRefresh className={`w-5 h-5 ${anyLoading ? 'animate-spin' : ''}`} style={{ color: 'hsl(25, 55%, 40%)' }} />
                 </button>
               </div>
             </div>
@@ -892,9 +1272,9 @@ export default function Page() {
         </header>
 
         {/* Main Content */}
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column: Gmail */}
+        <main className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {/* Column 1: Gmail */}
             <GmailSection
               data={gmailData}
               loading={gmailLoading}
@@ -906,7 +1286,7 @@ export default function Page() {
               sampleMode={sampleMode}
             />
 
-            {/* Right Column: Slack */}
+            {/* Column 2: Slack */}
             <SlackSection
               data={slackData}
               loading={slackLoading}
@@ -917,17 +1297,29 @@ export default function Page() {
               onToggleTodo={toggleTodo}
               sampleMode={sampleMode}
             />
+
+            {/* Column 3: Calendar */}
+            <CalendarSection
+              data={calendarData}
+              loading={calendarLoading}
+              error={calendarError}
+              onFetch={fetchCalendar}
+              onRetry={retryCalendar}
+              checkedTodos={checkedTodos}
+              onToggleTodo={toggleTodo}
+              sampleMode={sampleMode}
+            />
           </div>
 
           {/* Agent Status Panel */}
-          <div className="mt-8 max-w-md mx-auto">
+          <div className="mt-8 max-w-2xl mx-auto">
             <AgentStatusPanel activeAgentId={activeAgentId} />
           </div>
         </main>
 
         {/* Footer */}
         <footer className="border-t py-4 mt-8" style={{ borderColor: 'hsl(35, 25%, 82%)' }}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8">
             <p className="text-center text-xs" style={{ color: 'hsl(30, 15%, 45%)' }}>
               Inbox Intelligence Hub — Powered by AI agents
             </p>
