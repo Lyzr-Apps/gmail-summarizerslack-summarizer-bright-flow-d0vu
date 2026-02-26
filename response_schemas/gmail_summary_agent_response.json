@@ -1,0 +1,44 @@
+{
+  "agent_name": "Gmail Summary Agent",
+  "agent_id": "69a0975820f2d8662ce27ba7",
+  "description": "Fetches recent emails from Gmail, generates a concise summary of important messages, and produces an actionable to-do list from email content",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "summary": [
+      {
+        "sender": "string",
+        "subject": "string",
+        "gist": "string"
+      }
+    ],
+    "todos": [
+      {
+        "task": "string",
+        "source": "string",
+        "priority": "string"
+      }
+    ],
+    "total_emails_analyzed": "number",
+    "message": "string"
+  },
+  "example_response": {
+    "summary": [
+      {
+        "sender": "sample string",
+        "subject": "sample string",
+        "gist": "sample string"
+      }
+    ],
+    "todos": [
+      {
+        "task": "sample string",
+        "source": "sample string",
+        "priority": "sample string"
+      }
+    ],
+    "total_emails_analyzed": 0,
+    "message": "sample string"
+  }
+}

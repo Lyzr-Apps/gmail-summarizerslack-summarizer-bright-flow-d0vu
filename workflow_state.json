@@ -1,0 +1,38 @@
+{
+  "agents": [
+    {
+      "agent_id": "69a0975820f2d8662ce27ba7",
+      "name": "Gmail Summary Agent",
+      "node_id": "gmail_agent",
+      "description": "Fetches recent emails from Gmail, generates a concise summary of important messages, and produces an actionable to-do list from email content",
+      "model": "gpt-4.1",
+      "provider": "openai",
+      "temperature": 0.3,
+      "top_p": 1,
+      "agent_type": "json",
+      "tools": ["GMAIL_FETCH_EMAILS"],
+      "tool_source": "composio",
+      "image_output": false,
+      "voice_output": false,
+      "file_output": false,
+      "response_schema_file": "response_schemas/gmail_summary_agent_response.json"
+    },
+    {
+      "agent_id": "69a09759488a186a311cc2d9",
+      "name": "Slack Summary Agent",
+      "node_id": "slack_agent",
+      "description": "Fetches recent Slack channel conversations, generates a concise summary of key discussions, and produces an actionable to-do list from Slack messages",
+      "model": "gpt-4.1",
+      "provider": "openai",
+      "temperature": 0.3,
+      "top_p": 1,
+      "agent_type": "json",
+      "tools": ["SLACK_LIST_ALL_CHANNELS", "SLACK_FETCH_CONVERSATION_HISTORY"],
+      "tool_source": "composio",
+      "image_output": false,
+      "voice_output": false,
+      "file_output": false,
+      "response_schema_file": "response_schemas/slack_summary_agent_response.json"
+    }
+  ]
+}

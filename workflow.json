@@ -1,0 +1,32 @@
+{
+  "nodes": [
+    {
+      "id": "input_node",
+      "type": "Input",
+      "label": "User Dashboard",
+      "nodeCategory": "input"
+    },
+    {
+      "id": "gmail_agent",
+      "type": "Agent",
+      "label": "Gmail Summary Agent",
+      "nodeCategory": "agent"
+    },
+    {
+      "id": "slack_agent",
+      "type": "Agent",
+      "label": "Slack Summary Agent",
+      "nodeCategory": "agent"
+    }
+  ],
+  "edges": [
+    {
+      "source": "input_node",
+      "target": "gmail_agent"
+    },
+    {
+      "source": "input_node",
+      "target": "slack_agent"
+    }
+  ]
+}

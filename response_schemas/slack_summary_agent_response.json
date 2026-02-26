@@ -1,0 +1,46 @@
+{
+  "agent_name": "Slack Summary Agent",
+  "agent_id": "69a09759488a186a311cc2d9",
+  "description": "Fetches recent Slack channel conversations, generates a concise summary of key discussions, and produces an actionable to-do list from Slack messages",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "summary": [
+      {
+        "channel": "string",
+        "topic": "string",
+        "participants": "string",
+        "gist": "string"
+      }
+    ],
+    "todos": [
+      {
+        "task": "string",
+        "source_channel": "string",
+        "priority": "string"
+      }
+    ],
+    "total_messages_analyzed": "number",
+    "message": "string"
+  },
+  "example_response": {
+    "summary": [
+      {
+        "channel": "sample string",
+        "topic": "sample string",
+        "participants": "sample string",
+        "gist": "sample string"
+      }
+    ],
+    "todos": [
+      {
+        "task": "sample string",
+        "source_channel": "sample string",
+        "priority": "sample string"
+      }
+    ],
+    "total_messages_analyzed": 0,
+    "message": "sample string"
+  }
+}
