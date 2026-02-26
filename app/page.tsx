@@ -785,7 +785,7 @@ function CalendarSection({
   data: CalendarResponse | null
   loading: boolean
   error: string | null
-  onFetch: (query: string, daysAhead: number) => void
+  onFetch: (query: string, daysAhead: number, startDate: string, endDate: string) => void
   onRetry: () => void
   checkedTodos: Record<string, boolean>
   onToggleTodo: (key: string) => void
@@ -793,6 +793,8 @@ function CalendarSection({
 }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [daysAhead, setDaysAhead] = useState(7)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [summaryOpen, setSummaryOpen] = useState(true)
 
   const displayData = sampleMode ? SAMPLE_CALENDAR : data
@@ -845,11 +847,55 @@ function CalendarSection({
               value={daysAhead}
               onChange={(e) => setDaysAhead(Number(e.target.value) || 7)}
               className="text-sm w-24"
-              style={{ borderColor: 'hsl(35, 20%, 75%)', background: 'hsl(40, 30%, 96%)' }}
+              disabled={!!startDate || !!endDate}
+              style={{ borderColor: 'hsl(35, 20%, 75%)', background: 'hsl(40, 30%, 96%)', opacity: (startDate || endDate) ? 0.5 : 1 }}
             />
           </div>
+          {/* Date Range Selection */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-medium" style={{ color: 'hsl(30, 15%, 45%)' }}>Date range (optional)</Label>
+              {(startDate || endDate) && (
+                <button
+                  onClick={() => { setStartDate(''); setEndDate('') }}
+                  className="text-xs font-medium flex items-center gap-1 hover:opacity-80"
+                  style={{ color: 'hsl(180, 35%, 40%)' }}
+                >
+                  <FiX className="w-3 h-3" /> Clear dates
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <span className="text-xs block mb-1" style={{ color: 'hsl(30, 15%, 55%)', fontSize: '10px' }}>From</span>
+                <Input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="text-sm"
+                  style={{ borderColor: 'hsl(35, 20%, 75%)', background: 'hsl(40, 30%, 96%)' }}
+                />
+              </div>
+              <div>
+                <span className="text-xs block mb-1" style={{ color: 'hsl(30, 15%, 55%)', fontSize: '10px' }}>To</span>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  min={startDate || undefined}
+                  className="text-sm"
+                  style={{ borderColor: 'hsl(35, 20%, 75%)', background: 'hsl(40, 30%, 96%)' }}
+                />
+              </div>
+            </div>
+            {(startDate || endDate) && (
+              <p className="text-xs" style={{ color: 'hsl(180, 35%, 40%)', fontSize: '10px' }}>
+                Date range overrides &quot;Days ahead&quot; setting
+              </p>
+            )}
+          </div>
           <Button
-            onClick={() => onFetch(searchQuery, daysAhead)}
+            onClick={() => onFetch(searchQuery, daysAhead, startDate, endDate)}
             disabled={loading}
             className="w-full font-medium text-sm shadow-md"
             style={{ background: 'hsl(180, 35%, 40%)', color: 'hsl(40, 30%, 98%)' }}
@@ -1124,7 +1170,7 @@ export default function Page() {
   const [calendarData, setCalendarData] = useState<CalendarResponse | null>(null)
   const [calendarLoading, setCalendarLoading] = useState(false)
   const [calendarError, setCalendarError] = useState<string | null>(null)
-  const [calendarLastQuery, setCalendarLastQuery] = useState({ query: '', daysAhead: 7 })
+  const [calendarLastQuery, setCalendarLastQuery] = useState({ query: '', daysAhead: 7, startDate: '', endDate: '' })
 
   // Shared state
   const [checkedTodos, setCheckedTodos] = useState<Record<string, boolean>>({})
@@ -1194,14 +1240,24 @@ export default function Page() {
   }, [fetchSlack, slackLastQuery])
 
   // Calendar fetch
-  const fetchCalendar = useCallback(async (searchQuery: string, daysAhead: number) => {
+  const fetchCalendar = useCallback(async (searchQuery: string, daysAhead: number, startDate?: string, endDate?: string) => {
     setCalendarLoading(true)
     setCalendarError(null)
     setActiveAgentId(CALENDAR_AGENT_ID)
-    setCalendarLastQuery({ query: searchQuery, daysAhead })
+    setCalendarLastQuery({ query: searchQuery, daysAhead, startDate: startDate || '', endDate: endDate || '' })
 
     try {
-      const message = `Summarize my Google Calendar events.${searchQuery ? ' Search filter: ' + searchQuery : ''} Look ahead ${daysAhead} days from today.`
+      let dateInstruction = ''
+      if (startDate && endDate) {
+        dateInstruction = ` Show events from ${startDate} to ${endDate}.`
+      } else if (startDate) {
+        dateInstruction = ` Show events starting from ${startDate}.`
+      } else if (endDate) {
+        dateInstruction = ` Show events up to ${endDate}.`
+      } else {
+        dateInstruction = ` Look ahead ${daysAhead} days from today.`
+      }
+      const message = `Summarize my Google Calendar events.${searchQuery ? ' Search filter: ' + searchQuery : ''}${dateInstruction}`
       const result = await callAIAgent(message, CALENDAR_AGENT_ID)
 
       if (result?.success) {
@@ -1219,7 +1275,7 @@ export default function Page() {
   }, [])
 
   const retryCalendar = useCallback(() => {
-    fetchCalendar(calendarLastQuery.query, calendarLastQuery.daysAhead)
+    fetchCalendar(calendarLastQuery.query, calendarLastQuery.daysAhead, calendarLastQuery.startDate, calendarLastQuery.endDate)
   }, [fetchCalendar, calendarLastQuery])
 
   const anyLoading = gmailLoading || slackLoading || calendarLoading
