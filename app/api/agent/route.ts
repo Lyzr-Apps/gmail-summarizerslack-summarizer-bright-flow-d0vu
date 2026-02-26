@@ -95,10 +95,12 @@ function normalizeResponse(parsed: any): NormalizedAgentResponse {
   }
 
   if ('message' in parsed && typeof parsed.message === 'string') {
+    const { message, ...rest } = parsed
+    const hasDataFields = Object.keys(rest).length > 0
     return {
       status: 'success',
-      result: { text: parsed.message },
-      message: parsed.message,
+      result: hasDataFields ? parsed : { text: message },
+      message: message,
     }
   }
 

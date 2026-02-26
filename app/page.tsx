@@ -167,7 +167,9 @@ const SAMPLE_CALENDAR: CalendarResponse = {
 
 // --- Helpers ---
 function extractAgentData(result: any): any {
+  const fallback = { message: 'No data received', summary: [], todos: [], conflicts: [] }
   try {
+    // Primary path: result.response.result
     let data = result?.response?.result
     if (!data) {
       data = result?.response?.data || result?.response
@@ -176,12 +178,50 @@ function extractAgentData(result: any): any {
       try {
         data = JSON.parse(data)
       } catch {
-        return { message: data, summary: [], todos: [], conflicts: [] }
+        // might be a plain text message
       }
     }
-    return data || { message: 'No data received', summary: [], todos: [], conflicts: [] }
+    // Check if we got meaningful structured data (has summary or todos arrays)
+    if (data && typeof data === 'object' && (Array.isArray(data.summary) || Array.isArray(data.todos))) {
+      return data
+    }
+    // If data has a text field that looks like JSON, try parsing it
+    if (data?.text && typeof data.text === 'string') {
+      try {
+        const parsed = JSON.parse(data.text)
+        if (parsed && typeof parsed === 'object') return parsed
+      } catch {
+        // not JSON
+      }
+    }
+    // Fallback: try raw_response which has the original agent output
+    if (result?.raw_response) {
+      try {
+        let raw = typeof result.raw_response === 'string' ? JSON.parse(result.raw_response) : result.raw_response
+        // raw might be the Lyzr envelope: { response: "...", module_outputs: ... }
+        if (raw?.response) {
+          const inner = typeof raw.response === 'string' ? JSON.parse(raw.response) : raw.response
+          if (inner && typeof inner === 'object' && (Array.isArray(inner.summary) || Array.isArray(inner.todos))) {
+            return inner
+          }
+        }
+        if (raw && typeof raw === 'object' && (Array.isArray(raw.summary) || Array.isArray(raw.todos))) {
+          return raw
+        }
+      } catch {
+        // raw_response parse failed
+      }
+    }
+    // Return whatever data we have, or fallback
+    if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+      return { ...fallback, ...data }
+    }
+    if (data && typeof data === 'string') {
+      return { ...fallback, message: data }
+    }
+    return fallback
   } catch {
-    return { message: 'Failed to parse response', summary: [], todos: [], conflicts: [] }
+    return { ...fallback, message: 'Failed to parse response' }
   }
 }
 
